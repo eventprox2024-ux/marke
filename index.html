@@ -376,27 +376,6 @@ function fileToDataUrl(file){
   return new Promise((res,rej)=>{ const r = new FileReader(); r.onload = ()=>res(r.result); r.onerror = rej; r.readAsDataURL(file); });
 }
 
-/* ================= SEED DEMO (solo si está vacío) ================= */
-function seedIfEmpty(){
-  if (DB.listings.length) return;
-  const demo = [
-    { tipo:"servicio", categoria:"Plomería", nombre:"Plomería Rápida JC", encargado:"Julián Castro", telefono:"3001234567", direccion:"Cra 5 #10-20, Santa Marta", horario:"Lun-Sáb 7am-6pm", descripcion:"Reparación de fugas, instalación de sanitarios y grifería a domicilio.", domicilio:true, servicios:"Fugas, sanitarios, grifería, tuberías" },
-    { tipo:"servicio", categoria:"Cerrajería", nombre:"Cerrajería 24H", encargado:"Marta Pérez", telefono:"3009876543", direccion:"Av. Libertadores, Santa Marta", horario:"24 horas", descripcion:"Apertura de puertas, cambio de cerraduras, copias de llaves.", domicilio:true, servicios:"Aperturas, cerraduras, llaves" },
-    { tipo:"negocio", categoria:"Restaurante", nombre:"Sabor Costeño", telefono:"3011122233", direccion:"Calle 22 #4-15, Santa Marta", horario:"11am-9pm todos los días", descripcion:"Comida típica del Magdalena, pescado frito y arroz de coco.", domicilio:true,
-      productos:[{id:uid("p"),nombre:"Pescado frito + patacón",valor:28000,domicilioValor:5000,descripcion:"Con ensalada y arroz de coco"},{id:uid("p"),nombre:"Arroz de camarones",valor:32000,domicilioValor:5000,descripcion:"Porción individual"}] },
-    { tipo:"negocio", categoria:"Tienda", nombre:"Minimarket El Ahorro", telefono:"3044445566", direccion:"Cra 12 #8-40, Santa Marta", horario:"7am-10pm", descripcion:"Víveres, aseo y bebidas a buen precio.", domicilio:true,
-      productos:[{id:uid("p"),nombre:"Bulto de arroz 5kg",valor:22000,domicilioValor:3000,descripcion:""},{id:uid("p"),nombre:"Paquete de gaseosas x6",valor:15000,domicilioValor:3000,descripcion:""}] },
-    { tipo:"articulo", categoria:"Motos", nombre:"Moto AKT 125 2021", telefono:"3055556677", direccion:"Rodadero, Santa Marta", horario:"Cita previa", descripcion:"Moto en excelente estado, papeles al día, único dueño.", domicilio:false,
-      productos:[{id:uid("p"),nombre:"Moto AKT 125 2021",valor:6200000,domicilioValor:0,descripcion:"18.000 km, papeles al día"}] },
-    { tipo:"articulo", categoria:"Muebles y hogar", nombre:"Sofá seccional gris", telefono:"3066667788", direccion:"El Prado, Santa Marta", horario:"Cita previa", descripcion:"Sofá en muy buen estado, poco uso.", domicilio:true,
-      productos:[{id:uid("p"),nombre:"Sofá seccional gris",valor:850000,domicilioValor:20000,descripcion:"3 años de uso, sin manchas"}] }
-  ];
-  demo.forEach(d => {
-    DB.listings.push(Object.assign({ id: uid("lst"), ownerEmail:"demo@cashless.co", logo:"", fotos:[], productos:[], ratings:[], views: Math.floor(Math.random()*40), createdAt: Date.now() }, d));
-  });
-  saveLocal();
-}
-
 /* ================= SYNC SUPABASE (best-effort) ================= */
 async function syncUserToSupabase(u){ await supaSafe(()=>supa.from("users").upsert({ email:u.email, code:u.code, is_admin:!!u.isAdmin })); }
 async function syncListingToSupabase(l){
