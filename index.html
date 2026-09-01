@@ -242,13 +242,20 @@
 
   <div class="firma-section" id="zona-firma">
     <h2 style="border:none;">Firma electrónica</h2>
-    <p style="font-size:.88rem; color:#4b5563;">Cada parte debe firmar en su recuadro. La firma se registrará junto con la fecha y hora de aceptación.</p>
+    <p style="font-size:.88rem; color:#4b5563;">Cada parte firma por separado, cuando le sea posible. Al guardar tu firma queda registrada en la base de datos; la otra parte puede entrar más tarde a esta misma página y firmar la suya. Cuando ambas firmas estén registradas, se podrá descargar el PDF firmado.</p>
+
+    <div id="estadoCarga" style="font-size:.85rem; color:#6b7280; margin:10px 0;">Consultando estado de las firmas…</div>
+
+    <label for="lugar">Lugar de la firma</label>
+    <input type="text" id="lugar" value="Santa Marta, Colombia">
 
     <div class="firma-box">
       <h3>Firma de EL DESARROLLADOR — Víctor Hugo López Sánchez</h3>
       <canvas class="pad" id="pad1"></canvas>
+      <img id="img1" style="display:none; max-height:160px; border:1px solid var(--gris-borde); border-radius:6px; background:white;">
       <div class="firma-actions">
-        <button class="btn-secundario" onclick="limpiar(1)">Borrar</button>
+        <button class="btn-secundario" id="btnBorrar1" onclick="limpiar(1)">Borrar</button>
+        <button class="btn-primario" id="btnGuardar1" onclick="guardarFirma(1)">Guardar firma del Desarrollador</button>
       </div>
       <div class="estado pendiente" id="estado1">Pendiente de firma</div>
     </div>
@@ -256,16 +263,15 @@
     <div class="firma-box">
       <h3>Firma de EL CLIENTE — David Felipe Urueta</h3>
       <canvas class="pad" id="pad2"></canvas>
+      <img id="img2" style="display:none; max-height:160px; border:1px solid var(--gris-borde); border-radius:6px; background:white;">
       <div class="firma-actions">
-        <button class="btn-secundario" onclick="limpiar(2)">Borrar</button>
+        <button class="btn-secundario" id="btnBorrar2" onclick="limpiar(2)">Borrar</button>
+        <button class="btn-primario" id="btnGuardar2" onclick="guardarFirma(2)">Guardar firma del Cliente</button>
       </div>
       <div class="estado pendiente" id="estado2">Pendiente de firma</div>
     </div>
 
-    <label for="lugar">Lugar de la firma</label>
-    <input type="text" id="lugar" value="Santa Marta, Colombia">
-
-    <button class="btn-final" id="btnFinal" onclick="finalizarFirma()">Confirmar firmas y generar PDF firmado</button>
+    <button class="btn-final" id="btnPdf" onclick="descargarPDF()" disabled>Descargar PDF firmado (faltan firmas)</button>
 
     <div id="confirmacion">
       ✅ Contrato firmado correctamente. Se ha generado el PDF con ambas firmas y la fecha/hora de aceptación.
@@ -279,10 +285,15 @@
 
 <script>
   // Conexión a Supabase (anon key: pensada para uso público en el navegador,
-  // protegida por las políticas RLS definidas en schema.sql — solo permite INSERT)
+  // protegida por las políticas RLS definidas en schema.sql)
   const SUPABASE_URL = "https://vgcpwdjgcfjmacqfhosu.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZnY3B3ZGpnY2ZqbWFjcWZob3N1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgyMjEwMDEsImV4cCI6MjEwMzc5NzAwMX0.WCua1TVhzdk0KF-m2vxztlJ2d5WDdYYb9pelpD7GpiU";
   const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const CONTRATO_ID = "cashlesssai-contrato-1";
+
+  // Estado en memoria de las firmas (locales o cargadas desde la BD)
+  const firmas = { 1: null, 2: null };
+  const fechasFirma = { 1: null, 2: null };
 
   function crearPad(canvasId) {
     const canvas = document.getElementById(canvasId);
@@ -299,9 +310,10 @@
 
   const pad1 = crearPad("pad1");
   const pad2 = crearPad("pad2");
+  const pads = { 1: pad1, 2: pad2 };
 
   function limpiar(n) {
-    (n === 1 ? pad1 : pad2).clear();
+    pads[n].clear();
     document.getElementById("estado" + n).textContent = "Pendiente de firma";
     document.getElementById("estado" + n).className = "estado pendiente";
   }
@@ -310,45 +322,110 @@
     pad.addEventListener("endStroke", () => {
       const el = document.getElementById("estado" + n);
       if (!pad.isEmpty()) {
-        el.textContent = "Firmado ✓";
-        el.className = "estado ok";
+        el.textContent = "Trazo listo — pulsa \"Guardar firma\" para confirmar";
+        el.className = "estado pendiente";
       }
     });
   });
 
-  async function finalizarFirma() {
-    if (pad1.isEmpty() || pad2.isEmpty()) {
-      alert("Ambas partes deben firmar antes de continuar.");
+  // Bloquea visualmente el recuadro de una parte que ya firmó
+  function marcarFirmado(n, dataUrl, fechaIso) {
+    firmas[n] = dataUrl;
+    fechasFirma[n] = fechaIso;
+    document.getElementById("pad" + n).style.display = "none";
+    const img = document.getElementById("img" + n);
+    img.src = dataUrl;
+    img.style.display = "block";
+    document.getElementById("btnGuardar" + n).style.display = "none";
+    document.getElementById("btnBorrar" + n).style.display = "none";
+    const fechaTexto = fechaIso ? new Date(fechaIso).toLocaleString("es-CO", { dateStyle: "long", timeStyle: "short" }) : "";
+    const el = document.getElementById("estado" + n);
+    el.textContent = "Firmado ✓" + (fechaTexto ? " el " + fechaTexto : "");
+    el.className = "estado ok";
+  }
+
+  function actualizarBotonPdf() {
+    const btn = document.getElementById("btnPdf");
+    if (firmas[1] && firmas[2]) {
+      btn.disabled = false;
+      btn.textContent = "Descargar PDF firmado";
+    } else {
+      btn.disabled = true;
+      const falta = !firmas[1] && !firmas[2] ? "faltan ambas firmas" : (!firmas[1] ? "falta la firma del Desarrollador" : "falta la firma del Cliente");
+      btn.textContent = "Descargar PDF firmado (" + falta + ")";
+    }
+  }
+
+  // Al cargar la página, consultar si ya existe el registro y qué firmas tiene
+  async function cargarEstado() {
+    const estadoCarga = document.getElementById("estadoCarga");
+    try {
+      const { data, error } = await supabaseClient
+        .from("contrato_firmas")
+        .select("*")
+        .eq("contrato_id", CONTRATO_ID)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (data) {
+        if (data.lugar_firma) document.getElementById("lugar").value = data.lugar_firma;
+        if (data.desarrollador_firma_png) marcarFirmado(1, data.desarrollador_firma_png, data.desarrollador_firmado_en);
+        if (data.cliente_firma_png) marcarFirmado(2, data.cliente_firma_png, data.cliente_firmado_en);
+        estadoCarga.textContent = (data.desarrollador_firma_png && data.cliente_firma_png)
+          ? "Ambas partes ya firmaron este contrato."
+          : "Estado actual cargado. Puedes firmar la parte que falte.";
+      } else {
+        estadoCarga.textContent = "Aún no hay firmas registradas para este contrato.";
+      }
+    } catch (e) {
+      estadoCarga.textContent = "No se pudo consultar el estado de las firmas (" + (e.message || "error de conexión") + "). Puedes firmar de todas formas e intentar guardar.";
+    }
+    actualizarBotonPdf();
+  }
+  cargarEstado();
+
+  async function guardarFirma(n) {
+    const pad = pads[n];
+    if (pad.isEmpty()) {
+      alert("Primero dibuja la firma en el recuadro.");
       return;
     }
-    const btn = document.getElementById("btnFinal");
+    const btn = document.getElementById("btnGuardar" + n);
     btn.disabled = true;
-    btn.textContent = "Guardando firma...";
+    btn.textContent = "Guardando...";
 
-    const fecha = new Date();
-    const fechaTexto = fecha.toLocaleString("es-CO", { dateStyle: "long", timeStyle: "short" });
     const lugar = document.getElementById("lugar").value || "Santa Marta, Colombia";
-    const firmaDesarrollador = pad1.toDataURL("image/png");
-    const firmaCliente = pad2.toDataURL("image/png");
+    const dataUrl = pad.toDataURL("image/png");
+    const ahoraIso = new Date().toISOString();
 
-    // 1) Guardar el registro de la firma en Supabase
-    let guardadoOk = false;
-    let mensajeError = "";
+    const campo = n === 1
+      ? { desarrollador_firma_png: dataUrl, desarrollador_firmado_en: ahoraIso }
+      : { cliente_firma_png: dataUrl, cliente_firmado_en: ahoraIso };
+
     try {
-      const { error } = await supabaseClient.from("contrato_firmas").insert({
-        contrato_nombre: "Contrato CashlessSAI",
-        lugar_firma: lugar,
-        desarrollador_firma_png: firmaDesarrollador,
-        cliente_firma_png: firmaCliente,
-        user_agent: navigator.userAgent,
-      });
-      if (error) { mensajeError = error.message; } else { guardadoOk = true; }
-    } catch (e) {
-      mensajeError = e.message || "Error de conexión con la base de datos.";
-    }
+      const { error } = await supabaseClient
+        .from("contrato_firmas")
+        .upsert(
+          { contrato_id: CONTRATO_ID, contrato_nombre: "Contrato CashlessSAI", lugar_firma: lugar, user_agent: navigator.userAgent, ...campo },
+          { onConflict: "contrato_id" }
+        );
+      if (error) throw error;
 
-    // 2) Generar el PDF firmado (independiente del resultado del guardado)
-    btn.textContent = "Generando PDF...";
+      marcarFirmado(n, dataUrl, ahoraIso);
+      actualizarBotonPdf();
+    } catch (e) {
+      alert("No se pudo guardar la firma: " + (e.message || "error de conexión") + ". Intenta de nuevo.");
+      btn.disabled = false;
+      btn.textContent = n === 1 ? "Guardar firma del Desarrollador" : "Guardar firma del Cliente";
+    }
+  }
+
+  function descargarPDF() {
+    if (!firmas[1] || !firmas[2]) return;
+    const lugar = document.getElementById("lugar").value || "Santa Marta, Colombia";
+    const fechaTexto = new Date(fechasFirma[2] || fechasFirma[1]).toLocaleString("es-CO", { dateStyle: "long", timeStyle: "short" });
+
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ unit: "pt", format: "letter" });
     const margin = 50;
@@ -392,8 +469,8 @@
     doc.text("EL DESARROLLADOR", margin, y);
     doc.text("EL CLIENTE", margin + 300, y);
     y += 10;
-    doc.addImage(firmaDesarrollador, "PNG", margin, y, imgW, imgH);
-    doc.addImage(firmaCliente, "PNG", margin + 300, y, imgW, imgH);
+    doc.addImage(firmas[1], "PNG", margin, y, imgW, imgH);
+    doc.addImage(firmas[2], "PNG", margin + 300, y, imgW, imgH);
     y += imgH + 15;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9.5);
@@ -402,18 +479,7 @@
 
     doc.save("Contrato_CashlessSAI_Firmado.pdf");
 
-    const confirmacion = document.getElementById("confirmacion");
-    confirmacion.classList.add("show");
-    if (guardadoOk) {
-      confirmacion.innerHTML = "✅ Contrato firmado. El PDF se descargó y la firma quedó registrada en la base de datos.";
-      btn.textContent = "Contrato firmado ✓";
-    } else {
-      confirmacion.style.background = "#fff8e6";
-      confirmacion.style.borderColor = "#f2d888";
-      confirmacion.innerHTML = "⚠️ El PDF se descargó, pero no se pudo guardar el registro en la base de datos (" + mensajeError + ").";
-      btn.textContent = "Reintentar guardado";
-      btn.disabled = false;
-    }
+    document.getElementById("confirmacion").classList.add("show");
   }
 </script>
 
